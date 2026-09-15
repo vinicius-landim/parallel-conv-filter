@@ -16,3 +16,7 @@ gcc -o conv_filter conv_filter.c -lm
 ```
 
 (obs: -lm precisa para compilar as funções do stb_image)
+
+# Resultado😍😍
+![original](data/output_files/bird-4k-gray.png)
+![blur](data/output_files/bird-4k-blur.png)
