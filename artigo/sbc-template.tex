@@ -6,6 +6,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{enumitem}
 \usepackage{placeins}
+\usepackage{indentfirst}
 
 \hyphenation{english terms to not hyphenize various non repeatable words here something like long word Portuguese}
      
@@ -35,21 +36,30 @@
 
 
 \section{Introdução}
-
 % apresentação do problema, contextualização e objetivos
 
-\section{Fundamentação Teórica e Trabalhos Relacionados}
+O crescimento exponencial no volume de dados visuais e a necessidade de processamento em tempo real tornaram o uso de filtros convolucionais uma tarefa de alto custo computacional. Embora a paralelização seja a principal estratégia para acelerar a execução, a eficiência energética tornou-se um fator crítico no projeto de sistemas modernos. O aumento do número de \textit{threads} e o uso intensivo de \textit{hardware} nem sempre geram ganho proporcional de velocidade (\textit{speedup}), podendo elevar drasticamente o consumo de energia devido a gargalos de memória e contenção de barramento.
 
+Este trabalho tem como objetivo, portanto, avaliar o \textit{trade-off} entre ganho de desempenho e eficiência energética na paralelização de filtros convolucionais. Para isso, são analisados diferentes algoritmos e estratégias de concorrência aplicados a imagens de variados tamanhos, mensurando o tempo de execução e o consumo energético do processador. Com isso, busca-se identificar os limites de escalabilidade em que a paralelização otimiza o desempenho mantendo a sustentabilidade energética da aplicação.
+
+\section{Fundamentação Teórica e Trabalhos Relacionados}
 % filtros convolucionais
 % paralelização com OpenMP / CUDA
 % métricas de desempenho
 % apresentação de ~2(?) trabalhos relacionados
+
+Os filtros convolucionais operam mediante a aplicação de uma matriz de pesos (denominada máscara ou kernel) sobre os píxeis de uma imagem, alterando os valores originais com base na combinação linear da vizinhança. Devido ao seu elevado número de operações aritméticas repetitivas e à independência entre a computação de píxeis distintos, esta técnica apresenta uma elevada intensidade computacional e um alto grau de paralelismo de dados inerente, tornando-se ideal para arquiteturas concorrentes.
+
+Para explorar este paralelismo, utilizam-se modelos como o OpenMP e o CUDA. O OpenMP possibilita a paralelização em sistemas de memória partilhada através de diretivas de compilador que distribuem as iterações dos ciclos entre múltiplos threads do CPU. Por sua vez, o CUDA permite descarregar a carga computacional para a GPU, tirando partido de milhares de núcleos de processamento para executar blocos de threads de forma altamente concorrente, reduzindo significativamente a latência de processamento em grandes volumes de dados.
+
+A avaliação das soluções paralelizadas exige a análise conjunta do tempo de execução, do speedup e da eficiência energética. O tempo de execução mede a duração total do processamento, enquanto o speedup quantifica o ganho de velocidade em relação à versão sequencial. Por fim, a eficiência energética — frequentemente expressa em Joules ou na métrica Energy-Delay Product (EDP) — determina o consumo total de energia consumida para concluir a tarefa, permitindo identificar o ponto ótimo em que o ganho de desempenho não resulta num consumo energético desmedido.
 
 \section{Metodologia e Implementação}
 
 % como foi implementada a paralelização
 % apresentar hardware usado e outras bibliotecas utilizadas
 % casos de teste
+% A implementação da paralelização com OpenMP foi feita nas funções pré-processamento e convolução 
 
 \section{Resultados e Discussão}
 
@@ -86,6 +96,10 @@
 % \includegraphics[width=.7\textwidth]{table.jpg}
 % \end{table}
 
+\nocite{Afif-Cuda}
+\nocite{AlHumaidan-OpenMP}
+\nocite{Cremel-OpenMP}
+\nocite{gonzalez}
 \bibliographystyle{sbc}
 \bibliography{sbc-template}
 
