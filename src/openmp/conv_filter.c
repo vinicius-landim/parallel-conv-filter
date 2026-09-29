@@ -29,7 +29,7 @@ void convolve(int w, int h, const unsigned char *img_in, unsigned char *img_out,
 {
     int half = ksize/2;
     //loop externo: convolução para obter os pixels da imagem de saída
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for collapse(2)
     for(int y = 0; y < h; y++){
         for(int x = 0; x < w; x++){
             double sum = 0.0;
