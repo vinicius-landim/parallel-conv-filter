@@ -8,6 +8,7 @@
 \usepackage{placeins}
 \usepackage{indentfirst}
 \usepackage{hyperref}
+\usepackage{xcolor}
 \hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue}
 
 \hyphenation{english terms to not hyphenize various non repeatable words here something like long word Portuguese}
@@ -50,7 +51,7 @@ Este trabalho tem como objetivo, portanto, avaliar o \textit{trade-off} entre ga
 % métricas de desempenho
 % apresentação de ~2(?) trabalhos relacionados
 
-Um filtro convolucional é um mecanismo matemático que opera uma matriz de pesos, chamada de máscara ou \textit{kernel}, sobre os píxeis de uma imagem, alterando os valores originais com base na combinação linear da vizinhança. Devido ao seu elevado número de operações aritméticas repetitivas e à independência entre a computação de píxeis distintos, esta técnica apresenta uma elevada intensidade computacional e um alto grau de paralelismo de dados inerente, tornando-se ideal para arquiteturas concorrentes.
+Um filtro convolucional é um mecanismo matemático que opera uma matriz de pesos, chamada de máscara ou \textit{kernel} \textcolor{red}{(OBS:Idealmente não usar "kernel" ao longo do texto como sinônimo de filtro, pois também significa o trecho de código a ser executado na GPU)}, sobre os píxeis de uma imagem, alterando os valores originais com base na combinação linear da vizinhança \cite{gonzalez}. Devido ao seu elevado número de operações aritméticas repetitivas e à independência entre a computação de píxeis distintos, esta técnica apresenta uma elevada intensidade computacional e um alto grau de paralelismo de dados inerente, tornando-se ideal para arquiteturas concorrentes \cite{hwu2023}.
 
 Para explorar este paralelismo, utiliza-se, por exemplo, a biblioteca OpenMP e a plataforma CUDA. O OpenMP é uma biblioteca da linguagem C que possibilita a paralelização de tarefas em sistemas de memória compartilhada. Essa biblioteca encarrega o compilador de distribuir a carga computacional em \textit{threads} que, por sua vez, podem ser processadas em diferentes \textit{cores} da CPU. O CUDA, por outro lado, é uma plataforma da NVIDIA que possibilita a utilização de GPUs para processamento de propósito geral. Dessa maneira, os milhares de núcleos de processamento desse componente passam a executar blocos de \textit{threads} de forma altamente concorrente, reduzindo significativamente a latência de processamento em grandes volumes de dados.
 
@@ -61,9 +62,11 @@ As soluções paralelizadas são frequentemente analisadas e validadas em termos
   S_P=\frac{T}{T_P}
 \end{equation}
 
-% PARÁGRAFO SOBRE EFICIÊNCIA ENERGÉTICA
+\textcolor{red}{Se couber, descrever hierarquias de memória das GPUs e técnica de tiling}
 
-% PARÁGRAFO SOBRE TRABALHOS RELACIONADOS
+\textcolor{red}{PARÁGRAFO SOBRE EFICIÊNCIA ENERGÉTICA}
+
+\textcolor{red}{PARÁGRAFO SOBRE TRABALHOS RELACIONADOS}
 
 \section{Metodologia e Implementação}
 % como foi implementada a paralelização
@@ -85,8 +88,33 @@ Na função de pré-processamento, foi utilizada a diretiva \texttt{\#pragma omp
 Para chegar na versão final da implementação com OpenMP, foram realizados testes de tempo de execução das funções, comparando diferentes configurações de paralelização. A configuração apresentada foi escolhida com base nos menores tempos de execução obtidos.
 
 \subsection{Paralelização com CUDA} \label{sec:cuda}
+As paralelizações usando CUDA basearam-se nas estratégias projetadas e descritas por \cite{hwu2023} \textcolor{red}{(OBS: no modelo SBC deve-se usar \texttt{citeonline} para citações indiretas?)}. Dentre elas, três abordagens foram implementadas, cada uma explorando diferentes níveis da hierarquia de memória da GPU. A primeira consiste em uma abordagem ingênua, caracterizada pelo acesso extensivo de leitura e escrita diretamente na memória global. A segunda abordagem aproveita o tamanho reduzido e dos valores constantes do filtro convolucional, alocando-o na \emph{constant memory}. Por fim, a terceira estratégia emprega a técnica de \emph{tiling}, permitindo o uso da memória compartilhada para reduzir acessos redundantes à memória global durante o cálculo dos píxeis de saída.
 
+\subsubsection{Paralelização base}
+Nesta abordagem inicial, a responsabilidade de calcular cada pixel da imagem de saída é atribuída individualmente a uma \emph{thread} distinta. Para isso, as \emph{threads} são organizadas em um \emph{grid} bidimensional que recobre toda a dimensão da imagem, subdividido estruturalmente em blocos compostos por $16\times16$ \emph{threads}. A identificação exata de qual elemento da matriz de saída será processado por cada \emph{thread} baseia-se em seus índices espaciais. Essas coordenadas são calculadas combinando a dimensão e o índice do bloco com o índice interno da \emph{thread}. Pelo código, isso pode ser feito por meio da expressão \texttt{blockIdx.x * blockDim.x + threadIdx.x} e sua respectiva correspondente no eixo \texttt{y}. A partir dessas coordenadas, o escopo de atuação de cada \emph{thread} é definido.
 
+Apesar dessa implementação ser funcional e simples, tal estratégia possui restrições de desempenho. O primeiro obstáculo é a divergência no fluxo de controle, que ocorre em função da necessidade de tratar as bordas da imagem, onde a janela do filtro convolucional ultrapassa os limites espaciais da matriz, exigindo verificações condicionais para evitar acessos inválidos à memória. O problema dessa abordagem reside no fato de que essas estruturas condicionais fazem com que \emph{threads} de um mesmo \emph{warp} sigam caminhos de execução distintos, já que algumas pularão os cálculos enquanto outras os realizarão. No modelo SIMT das GPUs, isso força a serialização das instruções, o que reduz o paralelismo.
+
+O segundo gargalo é a ineficiência no acesso à memória. Como janelas de convolução vizinhas se sobrepõem quase inteiramente, um mesmo pixel de entrada é lido repetidamente por várias \emph{threads}. O mesmo ocorre com os coeficientes do filtro, que são lidos por todas as \emph{threads}. Além dessa redundância, todas os acessos são feitos diretamente na memória global, que possui alta latência e largura de banda limitada, sem qualquer reaproveitamento dos dados em memórias mais rápidas, como a memória compartilhada ou os registradores \cite{hwu2023}. Como consequência, o desempenho passa a ser limitado pela vazão da memória, e não pela capacidade de cálculo da GPU.
+
+\subsection{Paralelização usando a \emph{constant memory} e \emph{caching}}
+Para reduzir a quantidade de acessos à memória global, uma alternativa é declarar o filtro como um elemento a ser armazenado na \emph{constant memory} da GPU. Segundo \cite{hwu2023}, o uso desse espaço de memória é viável e arquiteturalmente ideal devido a três características inerentes ao filtro convolucional. 
+
+Primeiramente, os seus pesos numéricos permanecem inalterados durante toda a execução do \emph{kernel}, o que respeita a restrição dessa memória ser do tipo \emph{read-only}. Além disso, a matriz do filtro possui dimensões reduzidas, de modo que os dados ocupam apenas alguns \emph{kilobytes}, encaixando-se no limite de capacidade de 64 KB típico dessa memória. 
+
+A terceira razão diz respeito ao funcionamento da cache associada à \emph{constant memory}. Embora a \emph{constant memory} esteja fisicamente na DRAM do dispositivo, assim como a memória global, seus dados são acessados por meio de caches especializadas dentro de cada SM. O aproveitamento dessas \emph{caches} depende do padrão de acesso, e a convolução é favorável nesse aspecto. No caso, as \emph{threads} de um mesmo \emph{warp} operam de forma sincronizada e, como os índices usados para acessar o filtro dependem apenas dos laços de repetição, e não do índice de cada \emph{thread}, todas elas acessam a mesma variável do filtro ao mesmo tempo. Nesse cenário, as \emph{caches} conseguem fornecer uma grande largura de banda para atender à demanda de dados das \emph{threads}. Além disso, como o filtro é pequeno, é possível supor que seus elementos são sempre acessados a partir da cache, e não da \emph{constant memory} \cite{hwu2023}.
+
+Na implementação, a principal modificação no código é a declaração do filtro em escopo global utilizando a palavra-chave \texttt{\_\_constant\_\_}. Devido a essa mudança, a transferência dos dados da CPU para a placa de vídeo passa a ser realizada pela função \texttt{cudaMemcpyToSymbol}, que serve justamente para sinalizar à GPU que os valores copiados não serão alterados durante a execução do \emph{kernel}. Além disso, como o vetor do filtro adquire escopo global no dispositivo, ele pode ser acessado diretamente pelas \emph{threads}, não sendo mais necessário passá-lo como um parâmetro na chamada da função. \textcolor{red}{OBS: faz parte do escopo do artigo esses detalhes de implementação?}
+
+\subsubsection{Paralelização usando \emph{tiling}}
+
+Uma característica inerente à operação de convolução é que, para calcular o valor de dois \emph{píxeis} de saída adjacentes, o filtro se desloca apenas uma posição, de modo que é necessária a leitura de \emph{píxeis} de entrada repetidos, com apenas uma fração de novos dados. Nas abordagens anteriores esse problema não foi considerado, de modo que a imagem de entrada era lida da memória global, e cada reutilização de um mesmo pixel resultava em uma nova requisição a essa memória \cite{hwu2023}.
+
+Sendo assim, a técnica de \emph{tiling} surge como uma solução de desempenho. Essa abordagem consiste em particionar o grande volume de dados globais em subconjuntos menores, de modo a permitir sua alocação em uma memória menor e de acesso mais rápido, como a memória compartilhada (\textcolor{red}{OBS: Caso colocar a definição da técnica na fundamentação teórica, remover esse trecho}). Aplicando o \emph{tiling}, o segmento da imagem necessário às \emph{threads} de um bloco é carregado uma única vez da memória global para a memória compartilhada, e as leituras repetidas passam a ser atendidas por essa memória interna, de acesso significativamente mais rápido. 
+
+Nesta terceira implementação, a técnica de \emph{tiling} foi aplicada na memória compartilhada, mantendo o filtro na \emph{constant memory}. Para viabilizar essa arquitetura, uma condição estrutural é que o \emph{tile} de entrada seja estritamente maior que o \emph{tile} de saída. Isso se deve à necessidade de incluir margens em todas as direções com largura igual ao raio do filtro, garantindo os dados necessários para o cálculo dos \emph{píxeis} situados nas extremidades do bloco de saída.
+
+A respeito da implementação, como escolha de projeto, os blocos de \emph{threads} foram configurados com as mesmas dimensões do \emph{tile} de saída, delegando a cada \emph{thread} o cálculo de um único píxel resultante. Contudo, pelo fato de o \emph{tile} de entrada possuir mais elementos do que a quantidade de \emph{threads} disponíveis no bloco, é necessário que cada \emph{thread} transfira mais de um elemento da imagem da memória global para a compartilhada. Somente após o carregamento, seguido de uma instrução de sincronização, é que a convolução se inicia, com as \emph{threads} consumindo os dados localmente. Como cada píxel de entrada é lido repetidas vezes por diversas \emph{threads}, o custo da carga inicial é compensado com a redução do tráfego na memória global, maximizando o desempenho \cite{hwu2023}.
 \section{Resultados e Discussão}
 
 % análise das métricas de desempenho coletadas
