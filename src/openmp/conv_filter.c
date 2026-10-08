@@ -1,109 +1,132 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
 #include <omp.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../lib/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../lib/stb_image_write.h"
+#include "energy_meter.h" // Nossa biblioteca wrapper do PCM para Windows
 
-#define KERNEL_SIZE 31 //deve ser ímpar para ter um centro
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+#define KERNEL_SIZE 31 // deve ser ímpar para ter um centro
 
 void to_gray(int w, int h, int c, unsigned char *img, unsigned char *gray_img) {
-    size_t i;
-#pragma omp parallel for
-    for(i=0; i<(size_t)w*h; i++){
-        size_t index = i*c;
+    int i;
+    #pragma omp parallel for schedule(static)
+    for(i = 0; i < w * h; i++){
+        int index = i * c;
         unsigned char R = img[index];
         unsigned char G = img[index+1];
         unsigned char B = img[index+2];
-
-        gray_img[i] = 0.299*R+0.587*G+0.114*B; //https://www.mathworks.com/help/matlab/ref/rgb2gray.html
+        gray_img[i] = 0.299*R + 0.587*G + 0.114*B;
     }
 }
 
-//https://c-lang-learning.com/en/image-processing.html
-void convolve(int w, int h, const unsigned char *img_in, unsigned char *img_out, int ksize, const double *k)
-{
+void convolve(int w, int h, const unsigned char *img_in, unsigned char *img_out, int ksize, const double *k) {
     int half = ksize/2;
-    //loop externo: convolução para obter os pixels da imagem de saída
-#pragma omp parallel for collapse(2)
-    for(int y = 0; y < h; y++){
+    int y; 
+    // Removido o collapse(2) e paralelizado o loop externo (y), compatível com OpenMP 2.0 do MSVC
+    #pragma omp parallel for schedule(static)
+    for(y = 0; y < h; y++){
         for(int x = 0; x < w; x++){
             double sum = 0.0;
-            //loop interno: varredura do kernel
+            // loop interno para varredura do kernel
             for(int ky = 0; ky < ksize; ky++){
                 for(int kx = 0; kx < ksize; kx++){
-                    //(nx, ny): coordenada do pixel da imagem original que será multiplicada com o (kx,ky) do kernel
                     int ny = y + ky - half;
                     int nx = x + kx - half;
 
-                    //clamp nas bordas para manter dimensão de saída
+                    // clamp nas bordas para manter dimensão de saída
                     if(ny < 0) ny = 0;
                     if(ny >= h) ny = h - 1;
                     if(nx < 0) nx = 0;
                     if(nx >= w) nx = w - 1;
 
-                    sum += img_in[ny*w + nx]*k[ky*ksize + kx]; //pixel_imagem x pixel_kernel 
+                    sum += img_in[ny*w + nx]*k[ky*ksize + kx];
                 }
             }
             if(sum < 0) sum = 0;
             if(sum > 255) sum = 255;
-            img_out[y*w + x] = (unsigned char)sum; //y*w + x -> imagem armazenada em vetor construído pela concatenação das linhas da imagem
+            img_out[y*w + x] = (unsigned char)sum;
         }
     }
 }
 
-int main(){
-    int width, height, channels;
-    double start, end;
-
-    unsigned char *img = stbi_load("../../data/bird-4k.png", &width, &height, &channels, 0);
-    if(img == NULL){
-        fprintf(stderr, "Erro ao alocar imagem-fonte"); 
-        exit(1);
+int main(int argc, char *argv[]){
+    if(argc < 3) {
+        fprintf(stderr, "Uso: %s <caminho_da_imagem> <num_threads>\n", argv[0]);
+        return 1;
     }
-    printf("Imagem de dimensão (%d, %d, %d) carregada\n", width, height, channels);
+    
+    int num_threads = atoi(argv[2]);
+    if(num_threads < 1) {
+        fprintf(stderr, "Número de threads deve ser >= 1\n");
+        return 1;
+    }
+    omp_set_num_threads(num_threads);
+
+    if(init_energy_meter() != 0) {
+        fprintf(stderr, "Falha ao inicializar o PCM. Garanta que está a correr como Administrador.\n");
+        return 2;
+    }
+
+    int width, height, channels;
+    
+    unsigned char *img = stbi_load(argv[1], &width, &height, &channels, 0);
+    if(img == NULL){
+        fprintf(stderr, "Erro ao carregar imagem original\n");
+        cleanup_energy_meter();
+        return 1;
+    }
 
     unsigned char *gray_img = malloc((size_t)width*height);
-    if(gray_img == NULL){
-        fprintf(stderr, "Erro ao alocar imagem cinza");
-        exit(1);
+    if(gray_img == NULL) {
+        fprintf(stderr, "Erro ao alocar imagem cinza\n");
+        stbi_image_free(img);
+        cleanup_energy_meter();
+        return 1;
     }
-
-    start = omp_get_wtime();
-
     to_gray(width, height, channels, img, gray_img);
-    //stbi_write_png("../../data/output_files/bird-4k-gray.png", width, height, 1, gray_img, width);
-
-    end = omp_get_wtime();
-    printf("toGray: %f seconds.\n", end - start);
 
     unsigned char *blur_img = malloc((size_t)width*height);
     if(blur_img == NULL) {
-        fprintf(stderr, "Erro ao alocar simagem Sobel\n");
-        exit(1);
+        fprintf(stderr, "Erro ao alocar imagem de saída\n");
+        stbi_image_free(img);
+        free(gray_img);
+        cleanup_energy_meter();
+        return 1;
     }
 
     double blur_kernel[KERNEL_SIZE][KERNEL_SIZE];
-    double weigth = 1.0/(KERNEL_SIZE*KERNEL_SIZE); 
+    double weight = 1.0/(KERNEL_SIZE*KERNEL_SIZE);
 
     for(int i = 0; i < KERNEL_SIZE; i++) {
         for(int j = 0; j < KERNEL_SIZE; j++) {
-            blur_kernel[i][j] = weigth; //https://docs.opencv.org/4.13.0/d4/d13/tutorial_py_filtering.html
+            blur_kernel[i][j] = weight;
         }
     }
 
-    start = omp_get_wtime();
+    double start_time = omp_get_wtime();
+    start_energy_measurement();
 
     convolve(width, height, gray_img, blur_img, KERNEL_SIZE, &blur_kernel[0][0]);
 
-    end = omp_get_wtime();
-    printf("Convolve: %f seconds.\n", end - start);
+    EnergyReading energy = stop_energy_measurement();
+    double end_time = omp_get_wtime();
 
-    stbi_write_png("../../data/output_files/bird-4k-blur.png", width, height, 1, blur_img, width);
+    double time_spent = end_time - start_time;
+    double joules = energy.cpu_joules;
+
+    printf("%d,%.6f,%.6f\n", num_threads, time_spent, joules);
+
+    stbi_write_png("../data/output_files/output_blur_omp.png", width, height, 1, blur_img, width);
+
+    free(img);
+    free(gray_img);
+    free(blur_img);
+    cleanup_energy_meter();
 
     return 0;
 }

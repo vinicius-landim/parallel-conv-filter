@@ -205,7 +205,11 @@ Resoluções reduzidas (VGA) apresentam variações de escalabilidade provocadas
 \section{Conclusão}
 
 % resumo dos principais resultados
-% 
+Este trabalho analisou o \textit{trade-off} entre desempenho e eficiência energética na paralelização de filtros convolucionais, comparando uma versão sequencial, uma implementação com OpenMP variando o número de \textit{threads} entre 1 e 6 em CPU \textit{multicore} e três estratégias em CUDA que exploram diferentes níveis da hierarquia de memória da GPU. Todas as abordagens foram submetidas a um \textit{dataset} composto por imagens de cinco resoluções distintas, do VGA ($640 \times 480$) ao 4K ($3840 \times 2160$), permitindo observar o comportamento dos algoritmos sob diferentes volumes de dados.
+
+Os resultados mostraram que, em todas as configurações avaliadas, a redução do tempo de execução foi acompanhada por uma redução proporcional no consumo energético, de modo que a configuração mais rápida foi também a mais eficiente em cada arquitetura. Na CPU, o aumento do número de \textit{threads} elevou o \textit{speedup} de forma consistente, atingindo o melhor resultado com as 6 \textit{threads} físicas disponíveis, com $5{,}36\times$ e $152{,}98$\,J no \textit{dataset} 4K. Na GPU, a mitigação progressiva dos gargalos de memória levou a ganhos crescentes, sendo $139{,}7\times$ na versão base, $190{,}6\times$ com o uso da \textit{constant memory} e $425{,}5\times$ na implementação com \textit{tiling} e memória compartilhada, que consumiu apenas $1{,}34$\,J. Essa queda simultânea de tempo e energia se traduz em um EDP mais de $180.000\times$ inferior ao da execução sequencial.
+
+A variação da resolução evidenciou ainda que a eficiência da paralelização cresce com o volume de dados. Em resoluções baixas, o custo relativo de criação de \textit{threads} e de tráfego de dados limita o ganho, mas, à medida que a dimensão da imagem aumenta, a curva de \textit{speedup} converge para o comportamento ideal e o ganho energético se mantém válido em todas as ordens de grandeza. Como trabalhos futuros, pretende-se ampliar o número de \textit{threads} utilizadas na versão OpenMP, uma vez que a análise atual foi limitada às 6 \textit{threads} físicas disponíveis no \textit{hardware} de teste, estender a avaliação a filtros convolucionais de maiores dimensões e investigar o comportamento das abordagens em outros cenários de execução, como GPUs de arquiteturas mais recentes.
 
 % ---------------------------------------------------
 % EXEMPLOS DE FIGURAS E TABELAS
