@@ -34,7 +34,7 @@
 \end{abstract}
      
 \begin{resumo} 
-  Este artigo descreve a implementação de uma versão paralelizada de um algoritmo de filtro convolucional e sua respectiva análise de eficiência energética e desempenho. A paralelização do algortimo é feita de duas maneiras diferentes, com a biblioteca OpenMP e a plataforma CUDA, e cada versão é testada com um conjunto de imagens com diferentes dimensões. Os resultados das implementações paralelas são comparados com a versão sequencial do algoritmo e entre si em termos de tempo de execução, speedup e eficiência energética.
+  Este artigo descreve a implementação de uma versão paralelizada de um algoritmo de filtro convolucional e sua respectiva análise de eficiência energética e desempenho. A paralelização do algoritmo é feita de duas maneiras diferentes, com a biblioteca OpenMP e a plataforma CUDA, e cada versão é testada com um conjunto de imagens com diferentes dimensões. Os resultados das implementações paralelas são comparados com a versão sequencial do algoritmo e entre si em termos de tempo de execução, speedup e eficiência energética.
 \end{resumo}
 
 
@@ -83,7 +83,9 @@ Os testes foram executados em cima de um banco de 100 imagens, classificadas uni
 \subsection{Paralelização com OpenMP} \label{sec:openmp}
 A paralelização do algoritmo com OpenMP, disponível em \href{https://github.com/vinicius-landim/parallel-conv-filter/blob/main/src/openmp/conv_filter.c}{\texttt{parallel-conv-filter/openmp/conv\_filter.c}}, foi realizada em dois momentos distintos: na parte de pré-processamento e de convolução. As duas se tornaram fortes candidatas à paralelização devido à independência entre o processamento de píxeis diferentes.
 
-Na função de pré-processamento, foi utilizada a diretiva \texttt{\#pragma omp parallel for}, que permite distribuir as iterações do \textit{loop} entre as \textit{threads}. Desse modo, diferentes píxeis podem ser processados em paralelo. Já na função de convolução, foi utilizada a diretiva \texttt{\#pragma omp parallel for collapse(2)}. Nesse caso, o elemento \texttt{collapse(2)} combina os dois \textit{loops} aninhados, referentes às coordenadas x e y da imagem, em um único espaço de iterações que pode ser distribuído entre as \textit{threads}. Assim, o processamento de píxeis da imagem de saída pode ser realizado em paralelo.
+Na função de pré-processamento, foi utilizada a diretiva \texttt{\#pragma omp parallel for schedule(static)}, que permite distribuir as iterações do \textit{loop} entre as \textit{threads} de forma equitativa. Desse modo, diferentes píxeis podem ser processados em paralelo. Já na função de convolução, foi utilizada a diretiva \texttt{\#pragma omp parallel for collapse(2)}. Nesse caso, o elemento \texttt{collapse(2)} combina os dois \textit{loops} aninhados, referentes às coordenadas x e y da imagem, em um único espaço de iterações que pode ser distribuído entre as \textit{threads}. Assim, o processamento de píxeis da imagem de saída pode ser realizado em paralelo.
+
+Porém, como a ferramenta de compilação utilizada não possui suporte ao elemento \texttt{collapse(2)} por este pertencer a uma versão mais recente do OpenMP, o modificador foi removido por questões de compatibilidade. Consequentemente, a função de convolução foi adaptada para utilizar a diretiva \texttt{#pragma omp parallel for schedule(static)}, distribuindo de forma equitativa as iterações do \textit{loop} mais externo entre as \textit{threads}.
 
 Para chegar na versão final da implementação com OpenMP, foram realizados testes de tempo de execução das funções, comparando diferentes configurações de paralelização. A configuração apresentada foi escolhida com base nos menores tempos de execução obtidos.
 
