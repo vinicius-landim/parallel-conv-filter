@@ -64,14 +64,19 @@ Devido ao seu elevado número de operações aritméticas repetitivas e à indep
 
 Para explorar este paralelismo, utiliza-se, por exemplo, a biblioteca OpenMP e a plataforma CUDA. O OpenMP é uma biblioteca da linguagem C que possibilita a paralelização de tarefas em sistemas de memória compartilhada. Essa biblioteca encarrega o compilador de distribuir a carga computacional em \textit{threads} que, por sua vez, podem ser processadas em diferentes \textit{cores} da CPU \cite{openMP-paper}. O CUDA, por outro lado, é uma plataforma da NVIDIA que possibilita a utilização de GPUs para processamento de propósito geral. Dessa maneira, os milhares de núcleos de processamento desse componente passam a executar blocos de \textit{threads} de forma altamente concorrente, reduzindo significativamente a latência de processamento em grandes volumes de dados \cite{hwu2023}.
 
-As soluções paralelizadas são frequentemente analisadas e validadas em termos de tempo de execução, \textit{speedup} e, mais recentemente, da sua eficiência energética. O tempo de execução mede a duração total do processamento paralelo e pode ser obtido de forma fácil com funções de auxílio das próprias plataformas utilizadas ou do terminal do sistema operacional da máquina. O \textit{speedup}, por sua vez, é uma métrica que quantifica o ganho em tempo do algoritmo paralelizado (com tempo de execução $T_P$ em $P$ \textit{cores}) em relação à versão sequencial (com tempo de execução $T$ em 1 \textit{core}), e é calculado pela Equação (\ref{eq:speedup}) \cite{pacheco2011}.
+As soluções paralelizadas são frequentemente analisadas e validadas em termos de tempo de execução, \textit{speedup} e, mais recentemente, da sua eficiência energética. O tempo de execução mede a duração total do processamento paralelo e pode ser obtido de forma fácil com funções de auxílio das próprias plataformas utilizadas ou do terminal do sistema operacional da máquina. O \textit{speedup}, por sua vez, é uma métrica que quantifica o ganho em tempo do algoritmo paralelizado (com tempo de execução $T_P$ em $P$ \textit{cores}) em relação à versão sequencial (com tempo de execução $T$ em 1 \textit{core}), e é calculado pela Equação \ref{eq:speedup} \cite{pacheco2011}.
 
 \begin{equation}
   \label{eq:speedup}
   S_P=\frac{T}{T_P}
 \end{equation}
 
-\textcolor{red}{incluir métricas que serão definidas posteriormente}
+Em termos de eficiência energética, uma métrica comum é o \textit{energy-delay product} (EDP). Sua utilização é interessante pois relaciona a energia $E$ gasta por um processo com o seu tempo $T$ de execução, de acordo com a Equação \ref{eq:edp} \cite{fratin2018}. Dessa maneira, é possível investigar o \textit{trade-off} entre o aumento do grau de paralelização de um programa, o que pode diminuir seu tempo total de execução, com a energia utilizada. De maneira geral, um menor EDP é ideal.
+
+\begin{equation}
+  \label{eq:edp}
+  EDP = E \cdot T
+\end{equation}
 
 No domínio dos filtros convolucionais, tem-se que sua paralelização é uma abordagem consolidada na literatura, com implementações tanto em CPUs \emph{multicore} quanto em GPUs. Quanto às métricas avaliadas, Afif et al. \cite{Afif-Cuda}, por exemplo, implementaram em CUDA os filtros de Sobel e gaussiano e compararam seus tempos de execução com os de versões sequenciais em CPU, observando que o ganho cresce com o tamanho da imagem. Já Cremel e Arruda \cite{Cremel-OpenMP} avaliaram a paralelização com OpenMP de cinco filtros de pré-processamento, medindo tempo de execução, \emph{speedup} e eficiência paralela, e mostraram que o aumento do número de threads eleva o \emph{speedup}, mas reduz a eficiência paralela.
 
@@ -82,18 +87,16 @@ Em ambos os trabalhos, porém, a avaliação se concentra em métricas de tempo 
 % apresentar como as métricas foram coletadas (plataformas, bibliotecas etc)
 % casos de teste
 
-O trabalho desenvolvido pode ser encontrado no \href{https://github.com/vinicius-landim/parallel-conv-filter/}{repositório do github}. Estruturalmente, o algoritmo sequencial aplicado é dividido em duas partes: o pré-processamento, que transforma a imagem em tons de cinza, reduzindo sua representação a um único canal, e a convolução. Em cima desse algoritmo, foram implementadas as versões paralelas com OpenMP e CUDA, detalhadas nas subseções \ref{sec:openmp} e \ref{sec:cuda}, respectivamente.
+O trabalho desenvolvido pode ser encontrado no \href{https://github.com/vinicius-landim/parallel-conv-filter/}{repositório do github}. Estruturalmente, o algoritmo sequencial aplicado é dividido em duas partes: o pré-processamento, que transforma a imagem em tons de cinza, reduzindo sua representação a um único canal, e a convolução, que adota um filtro de suavização pela média de dimensões 31x31. Em cima desse algoritmo, foram implementadas as versões paralelas com OpenMP e CUDA, detalhadas nas subseções \ref{sec:openmp} e \ref{sec:cuda}, respectivamente.
 
 Os testes foram executados em cima de um banco de 100 imagens, classificadas uniformemente em 5 dimensões diferentes: VGA (640x480), HD (1280x720), Full HD (1920x1080), QHD (2560x1440) e 4K (3840x2160). Essa execução foi feita em um computador com um processador Intel Core i5-9400F com frequência de \textit{clock} de 2.90GHz e 6 \textit{cores}. O computador possui 16GB de memória RAM DDR4 e uma placa de vídeo NVIDIA GeForce GTX 1060 de 6GB.
 
 % PARÁGRAFO SOBRE A COLETA DE MÉTRICAS
 
 \subsection{Paralelização com OpenMP} \label{sec:openmp}
-A paralelização do algoritmo com OpenMP, disponível em \href{https://github.com/vinicius-landim/parallel-conv-filter/blob/main/src/openmp/conv_filter.c}{\texttt{parallel-conv-filter/openmp/conv\_filter.c}}, foi realizada em dois momentos distintos: na parte de pré-processamento e de convolução. As duas se tornaram fortes candidatas à paralelização devido à independência entre o processamento de píxeis diferentes.
+A paralelização do algoritmo com OpenMP foi realizada em dois momentos distintos: na parte de pré-processamento e de convolução. As duas se tornaram fortes candidatas à paralelização devido à independência entre o processamento de píxeis diferentes.
 
-Na função de pré-processamento, foi utilizada a diretiva \texttt{\#pragma omp parallel for schedule(static)}, que permite distribuir as iterações do \textit{loop} entre as \textit{threads} de forma equitativa. Desse modo, diferentes píxeis podem ser processados em paralelo. Já na função de convolução, foi utilizada a diretiva \texttt{\#pragma omp parallel for collapse(2)}. Nesse caso, o elemento \texttt{collapse(2)} combina os dois \textit{loops} aninhados, referentes às coordenadas x e y da imagem, em um único espaço de iterações que pode ser distribuído entre as \textit{threads}. Assim, o processamento de píxeis da imagem de saída pode ser realizado em paralelo.
-
-Porém, como a ferramenta de compilação utilizada não possui suporte ao elemento \texttt{collapse(2)} por este pertencer a uma versão mais recente do OpenMP, o modificador foi removido por questões de compatibilidade. Consequentemente, a função de convolução foi adaptada para utilizar a diretiva \texttt{\#pragma omp parallel for schedule(static)}, distribuindo de forma equitativa as iterações do \textit{loop} mais externo entre as \textit{threads}.
+Tanto no pré-processamento, quanto na convolução da imagem, foi utilizada a diretiva \texttt{\#pragma omp parallel for schedule(static)}. Ela permite distribuir as iterações do \textit{loop} mais externo entre as \textit{threads} de forma equitativa, de modo que diferentes píxeis possam ser processados em paralelo.
 
 Para chegar na versão final da implementação com OpenMP, foram realizados testes de tempo de execução das funções, comparando diferentes configurações de paralelização. A configuração apresentada foi escolhida com base nos menores tempos de execução obtidos.
 
@@ -115,15 +118,15 @@ A terceira razão diz respeito ao uso da cache associada à \emph{constant memor
 
 \subsubsection{Paralelização usando \emph{tiling}}
 
-Uma característica inerente à operação de convolução é que, para calcular o valor de dois \emph{píxeis} de saída adjacentes, o filtro se desloca apenas uma posição, de modo que é necessária a leitura de \emph{píxeis} de entrada repetidos, com apenas uma fração de novos dados. Nas abordagens anteriores esse problema não foi considerado, de modo que a imagem de entrada era lida da memória global, e cada reutilização de um mesmo pixel resultava em uma nova requisição a essa memória \cite{hwu2023}.
+Uma característica inerente à operação de convolução é que, para calcular o valor de dois píxeis de saída adjacentes, o filtro se desloca apenas uma posição, de modo que é necessária a leitura de píxeis de entrada repetidos, com apenas uma fração de novos dados. Nas abordagens anteriores esse problema não foi considerado, de modo que a imagem de entrada era lida da memória global, e cada reutilização de um mesmo pixel resultava em uma nova requisição a essa memória \cite{hwu2023}.
 
 Sendo assim, a técnica de \emph{tiling} surge como uma solução de desempenho. Essa abordagem consiste em particionar o grande volume de dados globais em subconjuntos menores, de modo a permitir sua alocação em uma memória menor e de acesso mais rápido, como a memória compartilhada. Aplicando o \emph{tiling}, o segmento da imagem necessário às \emph{threads} de um bloco é carregado uma única vez da memória global para a memória compartilhada, e as leituras repetidas passam a ser atendidas por essa memória interna, de acesso significativamente mais rápido. 
 
-Nesta terceira implementação, a técnica de \emph{tiling} foi aplicada na memória compartilhada, mantendo o filtro na \emph{constant memory}. Para viabilizar essa arquitetura, uma condição estrutural é que o \emph{tile} de entrada seja estritamente maior que o \emph{tile} de saída. Isso se deve à necessidade de incluir margens em todas as direções com largura igual ao raio do filtro, garantindo os dados necessários para o cálculo dos \emph{píxeis} situados nas extremidades do bloco de saída.
+Nesta terceira implementação, a técnica de \emph{tiling} foi aplicada na memória compartilhada, mantendo o filtro na \emph{constant memory}. Para viabilizar essa arquitetura, uma condição estrutural é que o \emph{tile} de entrada seja estritamente maior que o \emph{tile} de saída. Isso se deve à necessidade de incluir margens em todas as direções com largura igual ao raio do filtro, garantindo os dados necessários para o cálculo dos píxeis situados nas extremidades do bloco de saída.
 
 A respeito da implementação, como escolha de projeto, os blocos de \emph{threads} possuem as mesmas dimensões do \emph{tile} de saída, atribuindo a cada \emph{thread} o cálculo de um único píxel. Contudo, como o \emph{tile} de entrada é maior que o de saída, cada \emph{thread} pode precisar carregar múltiplos elementos da memória global para a compartilhada. Sendo assim, somente após o carregamento e sincronização do bloco a convolução é executada utilizando os dados locais. Embora essa etapa inicial tenha um custo adicional, a redução do tráfego na memória global promove a melhora do desempenho \cite{hwu2023}.
 
-\subsection{Ambiente de Compilação e Recolha de Métricas}
+\subsection{Ambiente de Compilação e Coleta de Métricas}
 
 Para garantir o rigor na extração dos dados de tempo e energia, o ambiente de desenvolvimento C/C++ foi inicializado através do \texttt{vcvarsall.bat} (MSVC). Os executáveis baseados em CUDA foram gerados com o compilador \texttt{nvcc}, definindo-se a arquitetura de \textit{hardware} específica da GPU (\texttt{-arch=sm\_61}) e garantindo a compatibilidade da ferramenta (\texttt{-allow-unsupported-compiler}). 
 
@@ -132,7 +135,7 @@ Crucialmente, para permitir a medição do consumo energético em tempo real (em
 \section{Resultados e Discussão}
 \label{sec:resultados}
 
-Nesta secção, avalia-se o desempenho e o consumo energético do filtro convolucional estruturado em duas frentes analíticas: (i) a aceleração proporcionada pela CPU \textit{multicore} (OpenMP) e pela GPU (CUDA); e (ii) a sensibilidade ao volume de dados dado a variação das dimensões de entrada.
+Nesta seção, avalia-se o desempenho e o consumo energético do filtro convolucional estruturado em duas frentes analíticas: (i) a aceleração proporcionada pela CPU \textit{multicore} (OpenMP) e pela GPU (CUDA); e (ii) a sensibilidade ao volume de dados dado a variação das dimensões de entrada.
 
 \subsection{Desempenho e Eficiência Energética (Dataset 4K)}
 
@@ -179,7 +182,7 @@ A evolução entre as abordagens de GPU reflete a mitigação progressiva dos ga
 \begin{enumerate}[leftmargin=*]
     \item \textbf{Exploração de Memória Constante:} O tempo reduziu para $0{,}0599$\,s. Esta melhoria deve-se ao mecanismo de \textit{broadcast} da \textit{constant cache}, que fornece os pesos estáticos do filtro a todas as \textit{threads} sem provocar acessos repetidos à memória global.
     \item \textbf{Exploração de Memória Compartilhada (\textit{Tiling}):} A versão \textit{Tiled} atingiu um \textit{speedup} de $\mathbf{425{,}5\times}$ sobre a versão sequencial. Ao transferir blocos de píxeis para a memória partilhada local, reduziram-se drasticamente as requisições à VRAM, maximizando a ocupação dos núcleos.
-    \item \textbf{Fenómeno \textit{Race-to-Sleep}:} Sob a perspetiva energética, o consumo do \textit{CUDA Tiled} caiu para apenas $1{,}34$\,J. Isto não decorre de uma baixa potência da placa, mas do facto de o tempo de execução ser tão ínfimo ($26{,}8$\,ms) que a energia acumulada no período colapsa, permitindo o retorno imediato da placa ao estado de repouso (\textit{idle}). 
+    \item \textbf{Fenômeno \textit{Race-to-Sleep}:} Sob a perspetiva energética, o consumo do \textit{CUDA Tiled} caiu para apenas $1{,}34$\,J. Isto não decorre de uma baixa potência da placa, mas do fato de o tempo de execução ser tão ínfimo ($26{,}8$\,ms) que a energia acumulada no período colapsa, permitindo o retorno imediato da placa ao estado de repouso (\textit{idle}). 
 \end{enumerate}
 
 Essa superioridade consolida-se no EDP (Figura \ref{fig:edp_4k}): com apenas $0{,}036$\,J$\cdot$s, o \textit{CUDA Tiled} atenuou o custo operacional em mais de $180.000\times$ em comparação à CPU, viabilizando uma eficiência superior a $12.000$\,MFLOPS/Watt.
