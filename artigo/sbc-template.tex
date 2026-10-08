@@ -82,9 +82,9 @@ Em ambos os trabalhos, porém, a avaliação se concentra em métricas de tempo 
 % apresentar como as métricas foram coletadas (plataformas, bibliotecas etc)
 % casos de teste
 
-O algoritmo sequencial usado como base para o trabalho está disponível em \href{https://github.com/vinicius-landim/parallel-conv-filter/blob/main/src/conv_filter.c}{\texttt{parallel-conv-filter/conv\_filter.c}}. Estruturalmente, ele pode ser dividido em duas partes principais: o pré-processamento (função \texttt{toGray}), que transforma a imagem em tons de cinza, reduzindo sua representação a um único canal, e a convolução (função \texttt{convolve}), de fato. Em cima desse algoritmo foram implementadas, então, as versões paralelas com OpenMP e CUDA, detalhadas nas subseções \ref{sec:openmp} e \ref{sec:cuda}, respectivamente.
+O trabalho desenvolvido pode ser encontrado no \href{https://github.com/vinicius-landim/parallel-conv-filter/}{repositório do github}. Estruturalmente, o algoritmo sequencial aplicado é dividido em duas partes: o pré-processamento, que transforma a imagem em tons de cinza, reduzindo sua representação a um único canal, e a convolução. Em cima desse algoritmo, foram implementadas as versões paralelas com OpenMP e CUDA, detalhadas nas subseções \ref{sec:openmp} e \ref{sec:cuda}, respectivamente.
 
-Os testes foram executados em cima de um banco de 100 imagens, classificadas uniformemente em 5 dimensões diferentes (CITAR DIMENSÕES). Essa execução foi feita em um computador com um processador Intel Core i5-9400F com frequência de \textit{clock} de 2.90GHz e 6 \textit{cores}. O computador possui 16GB de memória RAM DDR4 e uma placa de vídeo NVIDIA GeForce GTX 1060 de 6GB.
+Os testes foram executados em cima de um banco de 100 imagens, classificadas uniformemente em 5 dimensões diferentes: VGA (640x480), HD (1280x720), Full HD (1920x1080), QHD (2560x1440) e 4K (3840x2160). Essa execução foi feita em um computador com um processador Intel Core i5-9400F com frequência de \textit{clock} de 2.90GHz e 6 \textit{cores}. O computador possui 16GB de memória RAM DDR4 e uma placa de vídeo NVIDIA GeForce GTX 1060 de 6GB.
 
 % PARÁGRAFO SOBRE A COLETA DE MÉTRICAS
 
