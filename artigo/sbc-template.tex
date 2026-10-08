@@ -126,58 +126,23 @@ Nesta terceira implementação, a técnica de \emph{tiling} foi aplicada na mem�
 
 A respeito da implementação, como escolha de projeto, os blocos de \emph{threads} foram configurados com as mesmas dimensões do \emph{tile} de saída, delegando a cada \emph{thread} o cálculo de um único píxel resultante. Contudo, pelo fato de o \emph{tile} de entrada possuir mais elementos do que a quantidade de \emph{threads} disponíveis no bloco, é necessário que cada \emph{thread} transfira mais de um elemento da imagem da memória global para a compartilhada. Somente após o carregamento, seguido de uma instrução de sincronização, é que a convolução se inicia, com as \emph{threads} consumindo os dados localmente. Como cada píxel de entrada é lido repetidas vezes por diversas \emph{threads}, o custo da carga inicial é compensado com a redução do tráfego na memória global, maximizando o desempenho \cite{hwu2023}.
 
+\subsection{Ambiente de Compilação e Recolha de Métricas}
+
+Para garantir o rigor na extração dos dados de tempo e energia, o ambiente de desenvolvimento C/C++ foi inicializado através do \texttt{vcvarsall.bat} (MSVC). Os executáveis baseados em CUDA foram gerados com o compilador \texttt{nvcc}, definindo-se a arquitetura de \textit{hardware} específica da GPU (\texttt{-arch=sm\_61}) e garantindo a compatibilidade da ferramenta (\texttt{-allow-unsupported-compiler}). 
+
+Crucialmente, para permitir a medição do consumo energético em tempo real (em Joules) diretamente dos registadores da placa gráfica, o código foi ligado à biblioteca nativa NVML (\texttt{-lnvml}). Toda a bateria de testes operacionais foi automatizada por intermédio de um \textit{script} em Python (\texttt{coleta\_metricas.py}), responsável por submeter iterativamente o \textit{dataset} de imagens aos executáveis e consolidar as métricas calculadas em tabelas e gráficos estruturados.
+
 \section{Resultados e Discussão}
 \label{sec:resultados}
 
-Nesta seção, avaliam-se o desempenho e o consumo energético do filtro convolucional sob as arquiteturas \textit{multicore} (CPU via OpenMP) e massivamente paralela (GPU via CUDA). A análise está estruturada em três frentes: (i) a escalabilidade e o comportamento de potência e energia na CPU; (ii) a aceleração proporcionada pela hierarquia de memória na GPU; e (iii) a sensibilidade ao volume de dados com a variação das dimensões de entrada.
+Nesta secção, avalia-se o desempenho e o consumo energético do filtro convolucional estruturado em duas frentes analíticas: (i) a aceleração proporcionada pela CPU \textit{multicore} (OpenMP) e pela GPU (CUDA); e (ii) a sensibilidade ao volume de dados dado a variação das dimensões de entrada.
 
-\subsection{Desempenho e Comportamento Energético em CPU (Dataset 4K)}
+\subsection{Desempenho e Eficiência Energética (Dataset 4K)}
 
-A avaliação inicial em CPU utilizou as 20 imagens do \textit{dataset} em resolução 4K ($3840\times2160$ píxeis). A Tabela \ref{tab:resultados_4k} sintetiza os resultados de 1 a 6 \textit{threads}. Em relação à versão puramente sequencial em C ($11{,}41$\,s e $587{,}40$\,J, representada pela linha tracejada na Figura \ref{fig:energia_4k}), a execução OpenMP com 1 \textit{thread} registrou $11{,}84$\,s e $464{,}04$\,J, apresentando um \textit{speedup} inicial de $0{,}92\times$ devido ao \textit{overhead} de criação e gerenciamento das estruturas de \textit{threads} do \textit{runtime}.
+Na arquitetura CPU, o aumento da concorrência via OpenMP demonstrou uma escalabilidade estável. Em comparação com a versão sequencial (que registou $11{,}41$\,s e um consumo de $587{,}40$\,J), a configuração máxima de 6 \textit{threads} físicas atingiu um \textit{speedup} de $5{,}36\times$ (tempo mediano de $2{,}04$\,s) e colapsou o consumo energético para $152{,}98$\,J. 
 
-\begin{table}[htpb]
-\centering
-\caption{Métricas de desempenho estatístico em CPU no dataset 4K (20 imagens).}
-\label{tab:resultados_4k}
-\small
-\begin{tabular}{rrrrrrrr}
-\hline
-\textbf{Threads} & \textbf{Tempo (s)} & \textbf{Desvio (s)} & \textbf{Speedup} & \textbf{Eficiência} & \textbf{Energia (J)} & \textbf{EDP (J$\cdot$s)} & \textbf{MFLOPS/W} \\
-\hline
-1 & 11,8360 & 0,6787 & 0,92$\times$ & 0,9221 & 464,04 & 5492,43 & 34,35 \\
-2 & 5,6748  & 0,0389 & 1,92$\times$ & 0,9616 & 220,97 & 1253,96 & 72,15 \\
-3 & 3,8454  & 0,0296 & 2,84$\times$ & 0,9461 & 188,23 & 723,81  & 84,69 \\
-4 & 2,9029  & 0,0191 & 3,76$\times$ & 0,9399 & 171,51 & 497,89  & 92,95 \\
-5 & 2,3504  & 0,0308 & 4,64$\times$ & 0,9287 & 162,96 & 383,02  & 97,83 \\
-6 & 2,0364  & 0,1339 & 5,36$\times$ & 0,8932 & 152,98 & 311,53  & 104,21 \\
-\hline
-\end{tabular}
-\end{table}
+Este ponto ótimo da CPU serve como linha de base para a transição para a GPU, cujos resultados e métricas comparativas estão consolidados na Tabela \ref{tab:gpu_metrics}. A estabilidade e a reduzida dispersão destes tempos ao longo das imagens do \textit{dataset} podem ser constatadas na Figura \ref{fig:boxplot_4k}, comprovando o forte determinismo das execuções paralelas.
 
-\begin{figure}[htpb]
-    \centering
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{../src/graficos/metricas/09_boxplot_tempos.pdf}
-        \caption{Distribuição dos tempos (4K).}
-        \label{fig:boxplot_4k}
-    \end{minipage}
-    \hfill
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{../src/graficos/metricas/04_energia.pdf}
-        \caption{Consumo energético (4K).}
-        \label{fig:energia_4k}
-    \end{minipage}
-\end{figure}
-
-Conforme a concorrência aumenta, o algoritmo apresenta escalabilidade próxima à linear até 5 \textit{threads}, alcançando com 6 \textit{threads} um tempo mediano de $2{,}04$\,s, \textit{speedup} de $5{,}36\times$ e vazão de $4{,}07$\,Megapixels/s. A queda moderada na eficiência paralela ($89{,}3\%$) ao ocupar todos os núcleos físicos decorre da saturação da largura de banda do barramento DDR4, uma vez que o padrão de acesso do estêncil impõe alta demanda de leitura na memória compartilhada da CPU.
-
-A dispersão temporal do \textit{boxplot} (Figura \ref{fig:boxplot_4k}) comprova o determinismo da paralelização, com variabilidade diminuta entre imagens. Do ponto de vista energético (Figura \ref{fig:energia_4k}), embora a potência média demandada pelo encapsulamento se eleve de aproximadamente $39{,}1$\,W (1T) para $75{,}1$\,W (6T), o consumo de energia colapsa de centenas de Joules para $152{,}98$\,J. Essa redução demonstra que o aumento de potência dinâmica é amplamente supercompensado pela redução do tempo, promovendo um decaimento acentuado no \textit{Energy-Delay Product} (EDP), que atinge seu ponto ótimo de $311{,}53$\,J$\cdot$s na configuração máxima.
-
-\subsection{Aceleração em GPU e Eficiência Energética (CUDA)}
-
-A transição da computação para a GPU promoveu um salto expressivo de desempenho e eficiência. A Tabela \ref{tab:gpu_metrics} consolida a comparação entre a versão sequencial, o melhor caso em CPU (6T) e as três variantes em CUDA.
 
 \begin{table}[htpb]
     \centering
@@ -200,9 +165,9 @@ A transição da computação para a GPU promoveu um salto expressivo de desempe
     \centering
     \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../src/graficos/metricas/10_comparacao_cuda.pdf}
-        \caption{Otimizações na GPU.}
-        \label{fig:otimizacoes_gpu}
+        \includegraphics[width=\textwidth]{../src/graficos/metricas/09_boxplot_tempos.pdf}
+        \caption{Distribuição dos tempos (4K).}
+        \label{fig:boxplot_4k}
     \end{minipage}
     \hfill
     \begin{minipage}{0.48\textwidth}
@@ -213,31 +178,29 @@ A transição da computação para a GPU promoveu um salto expressivo de desempe
     \end{minipage}
 \end{figure}
 
-A evolução entre as abordagens de GPU reflete a mitigação progressiva dos gargalos de memória (Figura \ref{fig:otimizacoes_gpu}):
+A evolução entre as abordagens de GPU reflete a mitigação progressiva dos gargalos de memória:
 \begin{enumerate}[leftmargin=*]
-    \item \textbf{Memória Global para Constante:} O tempo reduziu de $0{,}0817$\,s para $0{,}0599$\,s (ganho de $26{,}7\%$). Essa melhora deve-se ao mecanismo de \textit{broadcast} da \textit{constant cache} dos \textit{Streaming Multiprocessors} (SMs), que fornece os pesos estáticos do filtro a todas as \textit{threads} do \textit{warp} sem provocar acessos repetidos à DRAM global.
-    \item \textbf{Exploração de Memória Compartilhada (\textit{Tiling}):} A versão \textit{CUDA Tiled} atingiu $0{,}0268$\,s, obtendo um \textit{speedup} de $\mathbf{425{,}5\times}$ sobre a versão sequencial (e $76\times$ mais rápida que o OpenMP com 6 \textit{threads}). Ao transferir blocos de píxeis com suas respectivas bordas (\textit{halo}) para a memória compartilhada local (SRAM), o algoritmo reduziu drasticamente as requisições à VRAM GDDR5, maximizando a taxa de ocupação dos núcleos de computação.
-    \item \textbf{Consumo Energético e o Fenômeno \textit{Race-to-Sleep}:} Sob a perspectiva energética, o consumo do \textit{CUDA Tiled} caiu para apenas $1{,}34$\,J (linha verde na Figura \ref{fig:energia_4k}). Esse resultado não decorre de baixa potência instantânea da placa — que operou em torno de $50$\,W durante o processamento —, mas sim do efeito \textit{Race-to-Sleep}: o tempo de execução foi tão ínfimo ($26{,}8$\,ms) que a energia acumulada no período colapsou, permitindo o retorno imediato da placa ao estado de repouso (\textit{idle}). 
+    \item \textbf{Exploração de Memória Constante:} O tempo reduziu para $0{,}0599$\,s. Esta melhoria deve-se ao mecanismo de \textit{broadcast} da \textit{constant cache}, que fornece os pesos estáticos do filtro a todas as \textit{threads} sem provocar acessos repetidos à memória global.
+    \item \textbf{Exploração de Memória Compartilhada (\textit{Tiling}):} A versão \textit{Tiled} atingiu um \textit{speedup} de $\mathbf{425{,}5\times}$ sobre a versão sequencial. Ao transferir blocos de píxeis para a memória partilhada local, reduziram-se drasticamente as requisições à VRAM, maximizando a ocupação dos núcleos.
+    \item \textbf{Fenómeno \textit{Race-to-Sleep}:} Sob a perspetiva energética, o consumo do \textit{CUDA Tiled} caiu para apenas $1{,}34$\,J. Isto não decorre de uma baixa potência da placa, mas do facto de o tempo de execução ser tão ínfimo ($26{,}8$\,ms) que a energia acumulada no período colapsa, permitindo o retorno imediato da placa ao estado de repouso (\textit{idle}). 
 \end{enumerate}
 
-Essa superioridade consolida-se na métrica de EDP (Figura \ref{fig:edp_4k}): com apenas $0{,}036$\,J$\cdot$s, o \textit{CUDA Tiled} promoveu uma mitigação superior a $180.000\times$ em comparação ao processamento sequencial da CPU, viabilizando uma eficiência energética estimada em mais de $12.000$\,MFLOPS/Watt.
+Essa superioridade consolida-se no EDP (Figura \ref{fig:edp_4k}): com apenas $0{,}036$\,J$\cdot$s, o \textit{CUDA Tiled} atenuou o custo operacional em mais de $180.000\times$ em comparação à CPU, viabilizando uma eficiência superior a $12.000$\,MFLOPS/Watt.
 
-\subsection{Impacto da Variação de Resolução (Escalabilidade e Volume)}
+\subsection{Impacto da Variação de Resolução (Volume de Dados)}
 
-Para investigar a sensibilidade dos algoritmos ao volume de dados, a Figura \ref{fig:resolucoes} analisa o \textit{speedup} e o consumo de energia nas cinco resoluções testadas (de VGA $640\times480$ a 4K $3840\times2160$).
+Para investigar a sensibilidade dos algoritmos, a Figura \ref{fig:resolucoes} analisa o impacto desde a resolução VGA ($640\times480$) até 4K.
 
 \begin{figure}[htpb]
     \centering
     \includegraphics[width=0.48\textwidth]{../src/graficos/dimensoes/02_speedup_resolucoes.pdf}
     \hfill
     \includegraphics[width=0.48\textwidth]{../src/graficos/dimensoes/04_energia_resolucoes.pdf}
-    \caption{Impacto da resolução na CPU (OpenMP): (a) escalabilidade do \textit{speedup}; (b) consumo energético mediano em escala logarítmica.}
+    \caption{Impacto da resolução na CPU (OpenMP): (a) escalabilidade do \textit{speedup}; (b) consumo energético mediano (escala logarítmica).}
     \label{fig:resolucoes}
 \end{figure}
 
-Na Figura \ref{fig:resolucoes}(a), observa-se que resoluções reduzidas como VGA ($0{,}31$\,Megapixels) apresentam variações de escalabilidade provocadas por oscilações na localidade da cache L3 e pelo custo relativo de criação das \textit{threads}. Contudo, à medida que a dimensão escala em direção ao Full HD, QHD e 4K, a curva de aceleração converge estavelmente para o comportamento ideal. 
-
-No gráfico logarítmico da Figura \ref{fig:resolucoes}(b), constata-se que o ganho energético da paralelização se mantém válido em todas as ordens de grandeza. O paralelismo dilui o custo das sincronizações de barramento em grandes volumes de dados, demonstrando que, para filtros convolucionais de alta definição, a aceleração concorrente é o mecanismo primário para viabilizar tanto o processamento em tempo real quanto a sustentabilidade energética dos sistemas computacionais.
+Resoluções reduzidas (VGA) apresentam variações de escalabilidade provocadas pelo custo relativo de criação das \textit{threads} e tráfego no barramento PCIe. Contudo, à medida que a dimensão escala, a curva de aceleração (Figura \ref{fig:resolucoes}a) converge de forma linear para o comportamento ideal. No gráfico logarítmico (Figura \ref{fig:resolucoes}b), constata-se que o ganho energético se mantém válido em todas as ordens de grandeza. O paralelismo massivo dilui o custo das transferências de dados perante grandes volumes, comprovando que a aceleração concorrente é o mecanismo primário para assegurar a sustentabilidade energética em operações de elevada intensidade computacional.
 
 \section{Conclusão}
 
