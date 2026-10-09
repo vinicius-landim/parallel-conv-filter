@@ -4,13 +4,6 @@ Este repositório contém o Trabalho 1 da disciplina Programação Concorrente e
 
 O objetivo do trabalho é implementar a paralelização de um algoritmo de filtro convolucional utilizando a biblioteca OpenMP e a plataforma NVDIA CUDA, e fazer a comparação com a execução sequencial do algoritmo em termos de desempenho e eficiência energética. 
 
-# Equipe
-* [Enzo Belfort](https://github.com/EnzoBelfort)
-* [Luiza de Souza](https://github.com/souza-luiza)
-* [Natália Amaral](https://github.com/nataliavitoriaamaral)
-* [Vinícius Landim](https://github.com/vinicius-landim)
-* [Viviane Park](https://github.com/parkvivi)
-
 # Estrutura do Repositório
 ```
 parallel-conv-filter/
@@ -43,6 +36,9 @@ make all
 make clean
 ```
 
-# Efeito do Filtro😍😍
-![original](data/output_files/bird-4k-gray.png)
-![blur](data/output_files/bird-4k-blur.png)
+# Equipe
+* [Enzo Belfort](https://github.com/EnzoBelfort)
+* [Luiza de Souza](https://github.com/souza-luiza)
+* [Natália Amaral](https://github.com/nataliavitoriaamaral)
+* [Vinícius Landim](https://github.com/vinicius-landim)
+* [Viviane Park](https://github.com/parkvivi)
