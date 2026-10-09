@@ -1,22 +1,48 @@
 # parallel-conv-filter
 
-Como executar (Windows):
+Este repositório contém o Trabalho 1 da disciplina Programação Concorrente e Distribuída ministrada no 2° semestre de 2026 no ICT-Unifesp. 
 
-```bash
-cd src\
+O objetivo do trabalho é implementar a paralelização de um algoritmo de filtro convolucional utilizando a biblioteca OpenMP e a plataforma NVDIA CUDA, e fazer a comparação com a execução sequencial do algoritmo em termos de desempenho e eficiência energética. 
+
+# Equipe
+* [Enzo Belfort](https://github.com/EnzoBelfort)
+* [Luiza de Souza](https://github.com/souza-luiza)
+* [Natália Amaral](https://github.com/nataliavitoriaamaral)
+* [Vinícius Landim](https://github.com/vinicius-landim)
+* [Viviane Park](https://github.com/parkvivi)
+
+# Estrutura do Repositório
+```
+parallel-conv-filter/
+├── artigo/                     # arquivos LaTeX do artigo
+├── data/                       # imagens teste
+├── lib/
+├── src/                        # algoritmo sequencial e paralelizado 
+├── Makefile
+└── README.md
 ```
 
+# Automações
+* Para compilar (versão sequencial e OpenMP):
 ```bash
-gcc -o conv_filter conv_filter.c -lm
-
+make build
 ```
 
+* Para executar testes e coletar dados:
 ```bash
-.\conv_filter.exe ..\data\nome_imagem_RGB
+make bench
 ```
 
-(obs: -lm precisa para compilar as funções do stb_image)
+* Para compilar e executar:
+```bash
+make all
+```
 
-# Resultado😍😍
+* Para limpar arquivos:
+```bash
+make clean
+```
+
+# Efeito do Filtro😍😍
 ![original](data/output_files/bird-4k-gray.png)
 ![blur](data/output_files/bird-4k-blur.png)
