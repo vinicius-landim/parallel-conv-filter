@@ -27,7 +27,6 @@ void to_gray(int w, int h, int c, unsigned char *img, unsigned char *gray_img) {
 void convolve(int w, int h, const unsigned char *img_in, unsigned char *img_out, int ksize, const double *k) {
     int half = ksize/2;
     int y; 
-    // Removido o collapse(2) e paralelizado o loop externo (y), compatível com OpenMP 2.0 do MSVC
     #pragma omp parallel for schedule(static)
     for(y = 0; y < h; y++){
         for(int x = 0; x < w; x++){

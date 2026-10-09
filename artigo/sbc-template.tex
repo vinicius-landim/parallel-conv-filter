@@ -130,33 +130,38 @@ A respeito da implementação, como escolha de projeto, os blocos de \emph{threa
 
 Para garantir o rigor na extração dos dados de tempo e energia, o ambiente de desenvolvimento C/C++ foi inicializado através do \texttt{vcvarsall.bat} (MSVC). Os executáveis baseados em CUDA foram gerados com o compilador \texttt{nvcc}, definindo-se a arquitetura de \textit{hardware} específica da GPU (\texttt{-arch=sm\_61}) e garantindo a compatibilidade da ferramenta (\texttt{-allow-unsupported-compiler}). 
 
-Crucialmente, para permitir a medição do consumo energético em tempo real (em Joules) diretamente dos registadores da placa gráfica, o código foi ligado à biblioteca nativa NVML (\texttt{-lnvml}). Toda a bateria de testes operacionais foi automatizada por intermédio de um \textit{script} em Python (\texttt{coleta\_metricas.py}), responsável por submeter iterativamente o \textit{dataset} de imagens aos executáveis e consolidar as métricas calculadas em tabelas e gráficos estruturados.
+A energia da CPU foi obtida por RAPL e a da GPU pela biblioteca NVML, com período de amostragem de 2 ms. Além do \textit{speedup} $S_P$ (Equação~\ref{eq:speedup}), utilizam-se a eficiência paralela, $E_P = S_P/P$, e o produto energia-atraso (EDP $= E\cdot t$), que pondera o consumo de energia pelo tempo de execução. Além disso, para permitir a medição do consumo energético em tempo real (em Joules) diretamente dos registadores da placa gráfica, usou-se a flag (\texttt{-lnvml}) no compilador. Toda a bateria de testes operacionais foi automatizada por intermédio de um \textit{script} em Python (\texttt{coleta\_metricas.py}), responsável por submeter iterativamente o \textit{dataset} de imagens aos executáveis e consolidar as métricas calculadas em tabelas e gráficos estruturados.
 
 \section{Resultados e Discussão}
 \label{sec:resultados}
 
-Nesta seção, avalia-se o desempenho e o consumo energético do filtro convolucional estruturado em duas frentes analíticas: (i) a aceleração proporcionada pela CPU \textit{multicore} (OpenMP) e pela GPU (CUDA); e (ii) a sensibilidade ao volume de dados dado a variação das dimensões de entrada.
+Nesta seção, avalia-se o desempenho e o consumo energético do filtro convolucional em duas frentes: (i) a aceleração obtida com a CPU \textit{multicore} (OpenMP) e com a GPU (CUDA); e (ii) a sensibilidade da versão OpenMP ao volume de dados, variando-se a resolução da imagem de entrada. Os resultados referem-se a imagens 4K ($3840\times2160$, 20 imagens) e a um filtro de $K\times K$ com $K=$\,31, o que corresponde a uma contagem nominal de $2K^2 = 1922$ operações de ponto flutuante por pixel.
 
 \subsection{Desempenho e Eficiência Energética (Dataset 4K)}
 
-Na arquitetura CPU, o aumento da concorrência via OpenMP demonstrou uma escalabilidade estável. Em comparação com a versão sequencial (que registou $11{,}41$\,s e um consumo de $587{,}40$\,J), a configuração máxima de 6 \textit{threads} físicas atingiu um \textit{speedup} de $5{,}36\times$ (tempo mediano de $2{,}04$\,s) e colapsou o consumo energético para $152{,}98$\,J. 
+Na CPU, o OpenMP apresentou escalabilidade próxima da linear até 6 núcleos físicos. Em relação à versão sequencial ($11{,}41$\,s), a execução com 6 \textit{threads} ($2{,}04$\,s) atingiu \textit{speedup} de $5{,}36\times$ e eficiência paralela de $0{,}89$. Com uma única \textit{thread}, a versão paralela foi $8\%$ mais lenta que a sequencial ($0{,}92\times$), possivelmente devido ao custo da região paralela. A energia diminuiu de $464{,}04$\,J (1 \textit{thread}) para $152{,}98$\,J (6 \textit{threads}), redução de $3{,}0\times$, menor que a redução de $5{,}8\times$ no tempo, pois a potência média estimada ($E/t$) aumentou de $39{,}2$\,W para $75{,}1$\,W. Não se observou aumento do consumo de energia com o número de \textit{threads}, o que é coerente com uma carga limitada por computação, e não por memória, nesta implementação.
 
-Este ponto ótimo da CPU serve como linha de base para a transição para a GPU, cujos resultados e métricas comparativas estão consolidados na Tabela \ref{tab:gpu_metrics}. A estabilidade e a reduzida dispersão destes tempos ao longo das imagens do \textit{dataset} podem ser constatadas na Figura \ref{fig:boxplot_4k}, comprovando o forte determinismo das execuções paralelas.
+A dispersão dos tempos (Figura~\ref{fig:boxplot_4k}) foi baixa entre 2 e 5 \textit{threads} (coeficiente de variação inferior a $1{,}4\%$), mas maior com 1 e 6 \textit{threads} ($5{,}7\%$ e $6{,}6\%$). Com 6 \textit{threads}, uma possível causa é a interferência do sistema operacional, já que todos os núcleos físicos ficam ocupados.
+
+Com a GPU, o ganho é de outra ordem de grandeza (Tabela~\ref{tab:gpu_metrics}). Em relação ao melhor caso da CPU (OpenMP, 6 \textit{threads}), a versão CUDA \textit{Tiled} foi $75{,}9\times$ mais rápida e consumiu $113{,}9\times$ menos energia; contra a versão sequencial, o \textit{speedup} foi de $407{,}0\times$.
 
 
 \begin{table}[htpb]
     \centering
-    \caption{Comparativo de Desempenho e Eficiência Energética (Dataset 4K).}
+    \caption{Comparativo de desempenho e eficiência energética (dataset 4K). O \textit{speedup} é calculado em relação à versão sequencial e a Pot. é estimada por $E/t$.}
     \label{tab:gpu_metrics}
-    \begin{tabular}{lcccc}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{lccccc}
         \hline
-        \textbf{Abordagem} & \textbf{Tempo (s)} & \textbf{Energia (J)} & \textbf{Speedup vs. Serial} & \textbf{EDP (J$\cdot$s)} \\
+        \textbf{Abordagem} & \textbf{Tempo (s)} & \textbf{Energia (J)} & \textbf{Pot. (W)} & \textbf{Speedup} & \textbf{EDP (J$\cdot$s)} \\
         \hline
-        Sequencial (CPU 1T) & 11,4100 & 587,40 & 1,00$\times$  & 6696,36 \\
-        OpenMP (CPU 6T)     & 2,0364  & 152,98 & 5,36$\times$  & 311,53  \\
-        CUDA Global         & 0,0817  & 7,51   & 139,7$\times$ & 0,613   \\
-        CUDA Constante      & 0,0599  & 5,76   & 190,6$\times$ & 0,345   \\
-        CUDA Tiled          & 0,0268  & 1,34   & 425,5$\times$ & 0,036   \\
+        Sequencial       & 11,4100  & 587,40 & 51,48 & 1,00$\times$   & 6696,36 \\
+        OpenMP 1T        & 11,84  & 464,04 & 39,2 & 0,92$\times$  & 5492,43 \\
+        OpenMP 6T        & 2,04   & 152,98 & 75,1 & 5,36$\times$  & 311,53  \\
+        CUDA Global      & 0,0817 & 7,51   & 91,9 & 133,6$\times$ & 0,613   \\
+        CUDA Constante   & 0,0599 & 5,76   & 96,2 & 182,3$\times$ & 0,345   \\
+        CUDA \textit{Tiled} & 0,0268 & 1,34 & 50,1 & 407,0$\times$ & 0,036 \\
         \hline
     \end{tabular}
 \end{table}
@@ -178,11 +183,11 @@ Este ponto ótimo da CPU serve como linha de base para a transição para a GPU,
     \end{minipage}
 \end{figure}
 
-A evolução entre as abordagens de GPU reflete a mitigação progressiva dos gargalos de memória:
+A evolução entre as versões CUDA pode ser resumida em três observações:
 \begin{enumerate}[leftmargin=*]
-    \item \textbf{Exploração de Memória Constante:} O tempo reduziu para $0{,}0599$\,s. Esta melhoria deve-se ao mecanismo de \textit{broadcast} da \textit{constant cache}, que fornece os pesos estáticos do filtro a todas as \textit{threads} sem provocar acessos repetidos à memória global.
-    \item \textbf{Exploração de Memória Compartilhada (\textit{Tiling}):} A versão \textit{Tiled} atingiu um \textit{speedup} de $\mathbf{425{,}5\times}$ sobre a versão sequencial. Ao transferir blocos de píxeis para a memória partilhada local, reduziram-se drasticamente as requisições à VRAM, maximizando a ocupação dos núcleos.
-    \item \textbf{Fenômeno \textit{Race-to-Sleep}:} Sob a perspetiva energética, o consumo do \textit{CUDA Tiled} caiu para apenas $1{,}34$\,J. Isto não decorre de uma baixa potência da placa, mas do fato de o tempo de execução ser tão ínfimo ($26{,}8$\,ms) que a energia acumulada no período colapsa, permitindo o retorno imediato da placa ao estado de repouso (\textit{idle}). 
+    \item \textit{Memória constante.} O tempo reduziu-se de $0{,}0817$\,s para $0{,}0599$\,s ($1{,}36\times$). O resultado é consistente com o mecanismo de \textit{broadcast} da \textit{constant cache}, que atende simultaneamente aos pesos do filtro lidos por todas as \textit{threads} de um \textit{warp}.
+    \item \textit{Memória compartilhada (\textit{tiling}).} A versão \textit{Tiled} ($0{,}0268$\,s) foi $2{,}23\times$ mais rápida que a de memória constante e $3{,}05\times$ mais rápida que a versão base. Esse ganho é consistente com a redução de leituras redundantes à memória global, já que cada pixel de entrada passa a ser carregado uma vez por bloco, e não uma vez por janela de convolução.
+    \item \textit{Energia.} Como $E = \bar{P}\cdot t$, a redução de energia depende do tempo e da potência média. A potência média estimada foi de $91{,}9$\,W (Global), $96{,}2$\,W (Constante) e $50{,}1$\,W (\textit{Tiled}), valores da mesma ordem de grandeza da estimada para a CPU com 6 \textit{threads} ($75{,}1$\,W). A razão de energia entre as versões Global e \textit{Tiled} ($5{,}6\times$) supera a razão de tempo ($3{,}05\times$): o fator adicional de $1{,}8\times$ decorre da menor potência média da versão \textit{Tiled}, possivelmente associada à menor demanda sobre a DRAM. Além disso, a energia foi integrada apenas durante a execução; o efeito de \textit{race-to-idle} (maior tempo em repouso dentro de uma janela fixa) não está incluído nesses valores.
 \end{enumerate}
 
 Essa superioridade consolida-se no EDP (Figura \ref{fig:edp_4k}): com apenas $0{,}036$\,J$\cdot$s, o \textit{CUDA Tiled} atenuou o custo operacional em mais de $180.000\times$ em comparação à CPU, viabilizando uma eficiência superior a $12.000$\,MFLOPS/Watt.
