@@ -122,7 +122,7 @@ int main(int argc, char *argv[]){
         final_output[i] = (unsigned char)val;
     }
  
-    stbi_write_png("../data/output_files/output_blur_omp.png", width, height, 1, final_output, width);
+    stbi_write_png("../../data/output_files/output_blur_omp.png", width, height, 1, final_output, width);
  
     free(img);
     free(gray_img);
